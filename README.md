@@ -21,8 +21,8 @@ Bikeshare-Ridership-Analysis/
 ├── notebooks/
 │   ├── 01_Data_Cleaning.ipynb       # Load, merge and clean 12 monthly CSVs
 │   ├── 02_EDA.ipynb                 # Exploratory data analysis
-│   ├── 03_Feature_Engineering.ipynb # Build features for modeling
-│   └── 04_Modeling.ipynb            # Time-series demand forecasting
+│   ├── 03_Feature_Engineering.ipynb # Build features for modelling
+│   └── 04_modelling.ipynb            # Time-series demand forecasting
 │
 ├── src/
 │   ├── __init__.py
@@ -58,7 +58,7 @@ Bike share ridership 2023-12.csv
 ```
 
 **4. Run the notebooks in order**
-Start with `01_Data_Cleaning.ipynb` and work through to `04_Modeling.ipynb`.
+Start with `01_Data_Cleaning.ipynb` and work through to `04_modelling.ipynb`.
 
 ## Key Features
 - **Modular source code**: reusable functions in `src/` are imported across all notebooks, keeping analysis DRY and readable
@@ -73,6 +73,6 @@ Start with `01_Data_Cleaning.ipynb` and work through to `04_Modeling.ipynb`.
 |---|---|
 | pandas, numpy | Data manipulation |
 | matplotlib, seaborn | Visualization |
-| scikit-learn | Preprocessing and modeling |
+| scikit-learn | Preprocessing and modelling |
 | statsmodels | SARIMA / statistical models |
 | holidays | Ontario public holiday detection |

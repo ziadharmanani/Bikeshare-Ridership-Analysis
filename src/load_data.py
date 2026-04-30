@@ -11,14 +11,12 @@ def load_bike_ridership_2023(data_folder=None):
     """
     Load all monthly Bike Share ridership CSVs for 2023.
 
-    Parameters
-    ----------
+    Args:
     data_folder : str or Path, optional
         Path to the folder containing the raw CSVs.
         Defaults to <project_root>/data/raw/.
 
-    Returns
-    -------
+    Returns:
     pd.DataFrame
         Combined dataframe indexed by Trip Id with columns:
         Trip Duration (seconds), Start Station Id, Start Time,
@@ -35,7 +33,7 @@ def load_bike_ridership_2023(data_folder=None):
 
     # Expected column order after cleaning
     columns = [
-        "Trip Id", "Trip Duration", "Start Station Id", "Start Time",
+        "Trip Id", "Trip Duration", "Start Station Id", "Start Time", 
         "Start Station Name", "End Station Id", "End Time",
         "End Station Name", "Bike Id", "User Type",
     ]

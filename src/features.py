@@ -15,26 +15,22 @@ PEAK_EVENING = [15, 16, 17, 18, 19]
 # Core feature engineering
 def parse_timestamps(df):
     """
-    Split the raw Start Time / End Time strings into separate
-    date and time columns, and extract day/month/hour components.
-
-    Expects raw columns: 'Start Time', 'End Time' (format: 'MM/DD/YYYY HH:MM').
+    Split Start Time and End Time into separate date and time columns.
     """
     df = df.copy()
 
-    # Start Time
-    parts = df["Start Time"].str.split(" ", expand=True)
-    df["Start Date"] = pd.to_datetime(parts[0], format="%m/%d/%Y")
-    df["Start Time"] = parts[1]  # keep only HH:MM
+    # Split "MM/DD/YYYY HH:MM" into date part and time part
+    start_parts = df["Start Time"].str.split(" ", expand=True)
+    df["Start Date"] = pd.to_datetime(start_parts[0], format="%m/%d/%Y")
+    df["Start Time"] = start_parts[1]
 
     df["Start Day"] = df["Start Date"].dt.day
     df["Start Month"] = df["Start Date"].dt.month
     df["Start Hour"] = pd.to_datetime(df["Start Time"], format="%H:%M").dt.hour
 
-    # End Time
-    parts = df["End Time"].str.split(" ", expand=True)
-    df["End Date"] = pd.to_datetime(parts[0], format="%m/%d/%Y")
-    df["End Time"] = parts[1]
+    end_parts = df["End Time"].str.split(" ", expand=True)
+    df["End Date"] = pd.to_datetime(end_parts[0], format="%m/%d/%Y")
+    df["End Time"] = end_parts[1]
 
     df["End Day"] = df["End Date"].dt.day
     df["End Month"] = df["End Date"].dt.month
@@ -44,37 +40,48 @@ def parse_timestamps(df):
 
 def add_derived_features(df):
     """
-    Add Weekday/Weekend flag, Peak Hour category, and convert
-    Trip Duration from seconds to minutes.
+    Add trip duration in minutes, weekday/weekend label, and peak hour category.
     """
     df = df.copy()
 
-    # Trip Duration: seconds to minutes (single conversion point)
+    # Convert trip duration from seconds to minutes
     df["Trip_Duration_Min"] = df["Trip Duration"] / 60
 
-    # Weekday / Weekend
-    df["Weekday_Weekend"] = df["Start Date"].dt.weekday.apply(
-        lambda x: "Weekday" if x < 5 else "Weekend"
-    )
+    # Label each trip as Weekday or Weekend
+    def get_weekday_weekend(date):
+        if date.weekday() < 5:
+            return "Weekday"
+        else:
+            return "Weekend"
 
-    # Peak Hour (categorical)
-    conditions = [
-        df["Start Hour"].isin(PEAK_MORNING),
-        df["Start Hour"].isin(PEAK_EVENING),
-    ]
-    choices = ["Morning", "Evening"]
-    df["Peak_Hour"] = np.select(conditions, choices, default="Off Peak")
+    df["Weekday_Weekend"] = df["Start Date"].apply(get_weekday_weekend)
 
-    # Display-friendly duration
-    df["Trip_Duration_MMSS"] = df["Trip Duration"].apply(
-        lambda s: f"{s // 60}:{s % 60:02d}"
-    )
+    # Label each trip by whether it falls in a peak hour
+    def get_peak_hour(hour):
+        if hour in PEAK_MORNING:
+            return "Morning"
+        elif hour in PEAK_EVENING:
+            return "Evening"
+        else:
+            return "Off Peak"
+
+    df["Peak_Hour"] = df["Start Hour"].apply(get_peak_hour)
+
+    # Format duration as a readable MM:SS string
+    def to_mmss(seconds):
+        minutes = seconds // 60
+        secs = seconds % 60
+        return f"{minutes}:{secs:02d}"
+
+    df["Trip_Duration_MMSS"] = df["Trip Duration"].apply(to_mmss)
 
     return df
 
 
 def reorder_columns(df):
-    """Reorder columns into a logical reading order."""
+    """
+    Reorder columns into a logical reading order.
+    """
     order = [
         "Trip_Duration_Min", "Trip_Duration_MMSS", "Trip Duration",
         "Start Station Id", "Start Station Name",
@@ -83,31 +90,29 @@ def reorder_columns(df):
         "End Time", "End Day", "End Month", "End Date",
         "User Type", "Weekday_Weekend", "Peak_Hour",
     ]
-    # Keep only columns that exist (in case some were dropped)
+    # Keep only columns that actually exist in the dataframe
     order = [c for c in order if c in df.columns]
     return df[order]
 
 # Outlier removal (IQR-based — robust to skew)
 def remove_outliers_iqr(df, column="Trip_Duration_Min", factor=1.5):
     """
-    Remove outliers using the Inter-Quartile Range method.
+    Remove outliers from a column using the IQR method.
 
-    Also drops trips with duration <= 0 (docking errors).
+    Args:
+        df (pd.DataFrame): The input dataframe.
+        column (str): The column to check for outliers.
+        factor (float): How strict the cutoff is. 1.5 is standard, 3.0 keeps more data.
 
-    Parameters
-    ----------
-    factor : float
-        IQR multiplier.  1.5 = standard, 3.0 = extreme-only.
-
-    Returns
-    -------
-    pd.DataFrame with outliers removed and index reset.
+    Returns:
+        pd.DataFrame: Dataframe with outliers removed and index reset.
     """
     df = df.copy()
 
-    # Drop zero/negative durations (docking errors)
+    # Remove trips with zero or negative duration (likely docking errors)
     df = df[df[column] > 0]
 
+    # Calculate the IQR boundaries
     q1 = df[column].quantile(0.25)
     q3 = df[column].quantile(0.75)
     iqr = q3 - q1
@@ -126,7 +131,9 @@ def remove_outliers_iqr(df, column="Trip_Duration_Min", factor=1.5):
 
 # Binary encodings for modeling
 def add_binary_features(df):
-    """Add binary-encoded versions of categorical columns for modeling."""
+    """
+    Add binary (0 or 1) versions of categorical columns for modeling.
+    """
     df = df.copy()
     df["Peak_Hour_Binary"] = df["Peak_Hour"].map(
         {"Off Peak": 0, "Morning": 1, "Evening": 1}
@@ -141,7 +148,9 @@ def add_binary_features(df):
 
 # Log transform
 def add_log_duration(df):
-    """Add log-transformed trip duration (log1p to handle near-zero values)."""
+    """
+    Add a log-transformed version of trip duration.
+    """
     df = df.copy()
     df["Log_Trip_Duration"] = np.log1p(df["Trip_Duration_Min"])
     return df
@@ -149,17 +158,15 @@ def add_log_duration(df):
 # Run full feature engineering pipeline
 def engineer_features(df, remove_outliers=True, iqr_factor=1.5):
     """
-    Run the complete feature engineering pipeline.
+    Run the full feature engineering pipeline on the raw ridership data.
 
-    Parameters
-    ----------
-    df : pd.DataFrame from load_bike_ridership_2023()
-    remove_outliers : bool
-    iqr_factor : float
+    Args:
+        df (pd.DataFrame): Raw ridership data from load_bike_ridership_2023().
+        remove_outliers (bool): Whether to remove outlier trips. Defaults to True.
+        iqr_factor (float): IQR multiplier for outlier removal. Defaults to 1.5.
 
-    Returns
-    -------
-    pd.DataFrame fully engineered and ready for EDA / modeling.
+    Returns:
+        pd.DataFrame: Fully engineered dataframe ready for analysis and modeling.
     """
     df = parse_timestamps(df)
     df = add_derived_features(df)

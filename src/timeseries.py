@@ -12,16 +12,11 @@ import pandas as pd
 
 try:
     import holidays as _holidays_lib
-
-    _CA_HOLIDAYS = _holidays_lib.Canada(prov="ON")
+    _CA_HOLIDAYS = _holidays_lib.country_holidays("CA", subdiv="ON")
 except ImportError:
     _CA_HOLIDAYS = None
 
-
-# ---------------------------------------------------------------------------
-# 1. Daily aggregation
-# ---------------------------------------------------------------------------
-
+# Daily aggregation
 def aggregate_daily(df: pd.DataFrame, date_col: str = "Start Date") -> pd.DataFrame:
     """
     Collapse trip-level data into a daily time series.
@@ -56,11 +51,7 @@ def aggregate_daily(df: pd.DataFrame, date_col: str = "Start Date") -> pd.DataFr
 
     return daily
 
-
-# ---------------------------------------------------------------------------
-# 2. Calendar / cyclical features
-# ---------------------------------------------------------------------------
-
+# Calendar/cyclical features
 def _cyclical_encode(series: pd.Series, period: int) -> pd.DataFrame:
     """Return sin and cos columns for a numeric series with given period."""
     angle = 2 * np.pi * series / period
@@ -82,7 +73,7 @@ def add_calendar_features(daily: pd.DataFrame) -> pd.DataFrame:
     daily = daily.copy()
     idx = pd.DatetimeIndex(daily.index)
 
-    daily["day_of_week"] = idx.dayofweek          # 0 = Monday
+    daily["day_of_week"] = idx.dayofweek # 0 = Monday
     daily["month"] = idx.month
     daily["day_of_year"] = idx.dayofyear
 
@@ -102,13 +93,9 @@ def add_calendar_features(daily: pd.DataFrame) -> pd.DataFrame:
     return daily
 
 
-# ---------------------------------------------------------------------------
-# 3. Lag & rolling features
-# ---------------------------------------------------------------------------
-
+# Lag and rolling features
 LAG_DAYS = [1, 7, 14, 28]
 ROLLING_WINDOWS = [7, 14, 28]
-
 
 def add_lag_features(
     daily: pd.DataFrame,
@@ -137,10 +124,7 @@ def add_rolling_features(
     return daily
 
 
-# ---------------------------------------------------------------------------
-# 4. Full pipeline
-# ---------------------------------------------------------------------------
-
+# Complete pipeline
 def build_daily_features(
     df: pd.DataFrame,
     target: str = "trip_count",

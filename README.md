@@ -2,10 +2,9 @@
 Originally developed as an academic team final project, this repository has since been independently revised and extended with improved code structure, modular source files, and a time-series forecasting pipeline.
 
 ## Overview
-This project analyzes all 2023 trip data from [Bike Share Toronto](https://open.toronto.ca/dataset/bike-share-toronto-ridership-data/) — over 4 million rides across 12 months. The goal is to understand ridership patterns and build a daily demand forecasting model.
+This project analyzes all 2023 trip data from [Bike Share Toronto](https://open.toronto.ca/dataset/bike-share-toronto-ridership-data/) with over 4 million rides across 12 months. The goal is to understand ridership patterns and build a daily demand forecasting model.
 
 Key questions explored:
-
 - When do people ride? (time of day, day of week, seasonality)
 - Who rides? (annual members vs. casual users)
 - What drives daily trip volume?

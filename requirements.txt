@@ -5,3 +5,5 @@ statsmodels>=0.14
 matplotlib>=3.7
 seaborn>=0.12
 holidays>=0.40
+prophet>=1.1
+xgboost>=2.0

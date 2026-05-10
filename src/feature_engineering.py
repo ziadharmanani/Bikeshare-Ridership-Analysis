@@ -1,10 +1,12 @@
 """
-timeseries.py
-Daily aggregation and time-series feature engineering for demand forecasting.
+feature_engineering.py
+All feature engineering for the Bike Share Toronto ridership dataset.
 
-Reads the cleaned trip-level CSV produced by notebook 01 and builds a daily
-time series with lag features, rolling statistics, cyclical encodings, and
-calendar flags suitable for SARIMA / Prophet / XGBoost.
+Trip-level: timestamp parsing, duration conversion, peak-hour and user-type
+binary encodings needed by the daily aggregation step.
+
+Daily-level: daily aggregation, calendar/cyclical features, lag and rolling
+window features for SARIMA / Prophet / Holt-Winters forecasting.
 """
 
 import numpy as np
@@ -16,14 +18,72 @@ try:
 except ImportError:
     _CA_HOLIDAYS = None
 
+
+# Trip-level features
+
+PEAK_MORNING = [7, 8, 9]
+PEAK_EVENING = [15, 16, 17, 18, 19]
+
+def parse_timestamps(df):
+    """
+    Split Start Time and End Time into separate date and time columns.
+    Handles both MM/DD/YYYY and YYYY-MM-DD timestamp formats.
+    """
+    df = df.copy()
+
+    start_parts = df["Start Time"].str.split(" ", expand=True)
+    df["Start Date"] = pd.to_datetime(start_parts[0], format="mixed", dayfirst=False)
+    df["Start Time"] = start_parts[1]
+
+    df["Start Hour"] = pd.to_datetime(df["Start Time"], format="mixed").dt.hour
+
+    end_parts = df["End Time"].str.split(" ", expand=True)
+    df["End Date"] = pd.to_datetime(end_parts[0], format="mixed", dayfirst=False)
+    df["End Time"] = end_parts[1]
+
+    return df
+
+def add_derived_features(df):
+    """
+    Add trip duration in minutes and the binary encodings needed by
+    aggregate_daily (Peak_Hour_Binary, User_Type_Binary).
+    """
+    df = df.copy()
+
+    # Duration in minutes
+    df["Trip_Duration_Min"] = df["Trip Duration"] / 60
+
+    # Peak hour binary (needed for pct_peak_hour in daily aggregation)
+    df["Peak_Hour_Binary"] = df["Start Hour"].apply(
+        lambda h: 1 if h in PEAK_MORNING or h in PEAK_EVENING else 0
+    )
+
+    # User type binary (needed for pct_annual_member in daily aggregation)
+    df["User_Type_Binary"] = df["User Type"].map(
+        {"Casual Member": 0, "Annual Member": 1}
+    )
+
+    return df
+
+def engineer_trip_features(df):
+    """
+    Run the trip-level feature engineering pipeline on raw ridership data.
+    Returns a DataFrame ready for aggregate_daily() or direct export.
+    """
+    df = parse_timestamps(df)
+    df = add_derived_features(df)
+    return df
+
+
 # Daily aggregation
+
 def aggregate_daily(df: pd.DataFrame, date_col: str = "Start Date") -> pd.DataFrame:
     """
     Collapse trip-level data into a daily time series.
 
     Returns a DataFrame indexed by date with columns:
         trip_count, mean_duration_min, median_duration_min,
-        pct_annual_member, pct_peak_hour, pct_weekend
+        pct_annual_member, pct_peak_hour
     """
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
@@ -34,7 +94,6 @@ def aggregate_daily(df: pd.DataFrame, date_col: str = "Start Date") -> pd.DataFr
         median_duration_min=("Trip_Duration_Min", "median"),
         pct_annual_member=("User_Type_Binary", "mean"),
         pct_peak_hour=("Peak_Hour_Binary", "mean"),
-        pct_weekend=("Weekday_Binary", lambda x: 1 - x.mean()),
     )
 
     daily.index = pd.to_datetime(daily.index)
@@ -51,7 +110,9 @@ def aggregate_daily(df: pd.DataFrame, date_col: str = "Start Date") -> pd.DataFr
 
     return daily
 
+
 # Calendar/cyclical features
+
 def _cyclical_encode(series: pd.Series, period: int) -> pd.DataFrame:
     """Return sin and cos columns for a numeric series with given period."""
     angle = 2 * np.pi * series / period
@@ -73,7 +134,7 @@ def add_calendar_features(daily: pd.DataFrame) -> pd.DataFrame:
     daily = daily.copy()
     idx = pd.DatetimeIndex(daily.index)
 
-    daily["day_of_week"] = idx.dayofweek # 0 = Monday
+    daily["day_of_week"] = idx.dayofweek
     daily["month"] = idx.month
     daily["day_of_year"] = idx.dayofyear
 
@@ -94,8 +155,10 @@ def add_calendar_features(daily: pd.DataFrame) -> pd.DataFrame:
 
 
 # Lag and rolling features
+
 LAG_DAYS = [1, 7, 14, 28]
 ROLLING_WINDOWS = [7, 14, 28]
+
 
 def add_lag_features(
     daily: pd.DataFrame,
@@ -124,7 +187,8 @@ def add_rolling_features(
     return daily
 
 
-# Complete pipeline
+# Complete daily pipeline
+
 def build_daily_features(
     df: pd.DataFrame,
     target: str = "trip_count",
@@ -133,7 +197,7 @@ def build_daily_features(
     drop_na: bool = True,
 ) -> pd.DataFrame:
     """
-    End-to-end pipeline: aggregate → calendar → lags → rolling.
+    End-to-end pipeline: aggregate -> calendar -> lags -> rolling.
 
     Parameters
     ----------

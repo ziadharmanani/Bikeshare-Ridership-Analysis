@@ -1,78 +1,73 @@
-# Bike Share Toronto Ridership Analysis (2023)
-Originally developed as an academic team final project, this repository has since been independently revised and extended with improved code structure, modular source files, and a time-series forecasting pipeline.
+# Bike Share Toronto Ridership Analysis (2020-2025)
 
-## Overview
-This project analyzes all 2023 trip data from [Bike Share Toronto](https://open.toronto.ca/dataset/bike-share-toronto-ridership-data/) with over 4 million rides across 12 months. The goal is to understand ridership patterns and build a daily demand forecasting model.
+An end-to-end data analysis and forecasting project using six years of Toronto Bike Share trip data. The project covers data cleaning, exploratory analysis,feature engineering, and a four-model forecasting comparison to predict daily ridership demand.
 
-Key questions explored:
-- When do people ride? (time of day, day of week, seasonality)
-- Who rides? (annual members vs. casual users)
-- What drives daily trip volume?
-- Can we forecast demand accurately?
+## The Story
+
+Toronto Bike Share launched as a small pilot and grew into a major transit network over the past decade. COVID-19 caused a sharp ridership collapse in March 2020, followed by a gradual recovery that surpassed pre-pandemic levels by 2022. This project analyzes that arc and forecasts where demand is headed using ~28 million trip records.
 
 ## Project Structure
+
 ```
-Bikeshare-Ridership-Analysis/
-│
-├── data/
-│   ├── raw/                         # Monthly CSVs from Bike Share Toronto (gitignored)
-│   └── processed/                   # Cleaned and aggregated outputs (gitignored)
-│
-├── notebooks/
-│   ├── 01_Data_Cleaning.ipynb       # Load, merge and clean 12 monthly CSVs
-│   ├── 02_EDA.ipynb                 # Exploratory data analysis
-│   ├── 03_Feature_Engineering.ipynb # Build features for modelling
-│   └── 04_modelling.ipynb            # Time-series demand forecasting
-│
-├── src/
-│   ├── __init__.py
-│   ├── load_data.py                 # Load and merge raw monthly CSVs
-│   ├── features.py                  # Feature engineering (timestamps, peak hours, encodings)
-│   └── timeseries.py                # Daily aggregation, lag/rolling features, calendar flags
-│
-├── outputs/                         # Generated figures and model outputs
-├── requirements.txt
-└── .gitignore
+src/
+  load_data_multi.py       Multi-year data loader with column normalization
+  feature_engineering.py   Trip-level and daily-level feature pipelines
+
+notebooks/
+  01_Data_Cleaning.ipynb   Load, clean, filter, export to Parquet
+  02_EDA.ipynb             Daily aggregation, temporal patterns, decomposition,
+                           stationarity tests, ACF/PACF, correlations
+  03_Feature_Engineering   Builds daily feature matrix (lags, rolling windows,
+                           calendar/cyclical features)
+  04_Modelling.ipynb       Four-model forecasting comparison
+
+outputs/data/
+  ridership.parquet        Daily aggregated features (~2,164 rows)
+  ridership_clean.parquet  Trip-level cleaned data (~28M rows)
 ```
+
+## Data
+
+Source: [Toronto Open Data - Bike Share Ridership](https://open.toronto.ca/dataset/bike-share-toronto-ridership-data/)
+
+Monthly CSVs covering January 2020 through December 2025. The data loader handles inconsistent column names, varying User Type labels (Member/Subscriber/Annual Member), encoding issues, and BOM characters across years. Trips are filtered to 60-3600 seconds to remove docking errors and extreme outliers.
+
+## Feature Engineering
+
+The pipeline builds features at two levels:
+
+**Trip-level:** timestamp parsing (handles multiple date formats), trip duration in minutes, peak hour classification, user type binary encoding.
+
+**Daily-level:** daily aggregation (trip count, mean/median duration, member percentage, peak hour percentage), calendar features (day of week, month, day of year with sine/cosine cyclical encoding, holidays, weekends), lag features (1, 7, 14, 28 days), and rolling window statistics (7, 14, 28-day mean and standard deviation).
+
+## Modelling
+
+Four models are compared on a 2025 hold-out test set (trained on 2020-2024):
+
+| Model | MAE | RMSE | MAPE |
+|---|---|---|---|
+| SARIMA(1,1,1)(1,0,1,7) | 31,878 | 35,835 | 192.6% |
+| Prophet | 5,711 | 6,693 | 110.7% |
+| Holt-Winters (s=365) | 3,873 | 5,002 | 47.8% |
+| XGBoost | 3,409 | 4,230 | 29.3% |
+
+**SARIMA** with weekly seasonality (s=7) captured day-to-day autocorrelation but couldn't model the annual summer/winter cycle over a 365-day forecast horizon. Setting s=365 is computationally infeasible for SARIMAX.
+
+**Prophet** captured the annual shape through automatic yearly/weekly decomposition and Canadian holiday regressors, but consistently underpredicted summer peaks due to COVID pulling the trend down.
+
+**Holt-Winters** with annual seasonality (s=365) and multiplicative seasonal component delivered strong results by learning the full repeating annual pattern directly.
+
+**XGBoost** performed best by treating forecasting as supervised regression over engineered features (lags, rolling averages, calendar variables), giving it access to both short-term autocorrelation and long-term seasonal patterns simultaneously.
 
 ## Setup
-**1. Clone the repository**
-```bash
-git clone https://github.com/your-username/Bikeshare-Ridership-Analysis.git
-cd Bikeshare-Ridership-Analysis
-```
 
-**2. Install dependencies**
 ```bash
 pip install -r requirements.txt
 ```
 
-**3. Add the raw data**
-Download the 2023 monthly ridership CSVs from [Bike Share Toronto Open Data](https://open.toronto.ca/dataset/bike-share-toronto-ridership-data/) and place them in `data/raw/`. Files should follow the naming convention:
+## Data Pipeline
 
-```
-Bike share ridership 2023-01.csv
-Bike share ridership 2023-02.csv
-...
-Bike share ridership 2023-12.csv
-```
-
-**4. Run the notebooks in order**
-Start with `01_Data_Cleaning.ipynb` and work through to `04_modelling.ipynb`.
-
-## Key Features
-- **Modular source code**: reusable functions in `src/` are imported across all notebooks, keeping analysis DRY and readable
-- **Robust data loading**: handles encoding inconsistencies and column name variations across monthly files
-- **IQR outlier removal**: removes docking errors and extreme trip durations
-- **Time-series pipeline**: daily aggregation with lag features (1, 7, 14, 28 days), rolling statistics, cyclical calendar encodings, and Ontario public holiday flags
-- **Binary encodings**: user type, peak hour, and weekday/weekend flags for model-ready features
-
-## Dependencies
-
-| Package | Purpose |
-|---|---|
-| pandas, numpy | Data manipulation |
-| matplotlib, seaborn | Visualization |
-| scikit-learn | Preprocessing and modelling |
-| statsmodels | SARIMA / statistical models |
-| holidays | Ontario public holiday detection |
+1. Run `01_Data_Cleaning.ipynb` to download and clean raw data
+2. Run `02_EDA.ipynb` for exploratory analysis
+3. Run `03_Feature_Engineering.ipynb` to build the daily feature matrix
+4. Run `04_Modelling.ipynb` for the forecasting comparison

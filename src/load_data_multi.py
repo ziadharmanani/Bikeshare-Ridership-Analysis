@@ -195,8 +195,22 @@ def _load_single_year(url, year, duration_range=None):
                         df_temp = df_temp[
                             (df_temp["Trip Duration"] >= lo) & (df_temp["Trip Duration"] <= hi)
                         ]
-
                     dfs.append(df_temp)
+            elif file_info.filename.endswith(".zip"):
+                with z.open(file_info) as inner_zip_bytes:
+                    with ZipFile(inner_zip_bytes) as inner_z:
+                        for inner_file in inner_z.infolist():
+                            if inner_file.filename.endswith(".csv") and not inner_file.filename.startswith("__MACOSX"):
+                                with inner_z.open(inner_file) as f:
+                                    df_temp = pd.read_csv(f, encoding="latin1")
+                                    df_temp = _normalize_columns(df_temp)
+                                    df_temp = _normalize_user_type(df_temp)
+                                    df_temp["year"] = year
+                                    df_temp = df_temp[[c for c in df_temp.columns if c in _CANONICAL_COLUMNS]]
+                                    if duration_range is not None and "Trip Duration" in df_temp.columns:
+                                        lo, hi = duration_range
+                                        df_temp = df_temp[(df_temp["Trip Duration"] >= lo) & (df_temp["Trip Duration"] <= hi)]
+                                    dfs.append(df_temp)
 
     return dfs
 
